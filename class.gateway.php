@@ -39,7 +39,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   $this->title        = $this->get_option('title');
   $this->description  = $this->get_option('description');
   $this->instructions = $this->get_option('instructions', $this->description);
-  $this->merchant     = $this->get_option('merchant_id');
+  $this->vendor     = $this->get_option('vendor_id');
   $this->api_key      = $this->get_option('api_key');
   $this->api_secret   = $this->get_option('api_secret');
   $this->api_url      = $this->get_option('api_url');
@@ -86,10 +86,10 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
     'default'     => __('Pay via Selcom Gateway', 'rcpro'),
     'desc_tip'    => true,
    ),
-   'merchant'     => array(
-    'title'       => __('Merchant ID', 'rcpro'),
+   'vendor'     => array(
+    'title'       => __('Vendor', 'rcpro'),
     'type'        => 'text',
-    'description' => __('Merchant ID provided by Selcom.', 'rcpro'),
+    'description' => __('Vendor ID provided by Selcom.', 'rcpro'),
     'default'     => '',
     'desc_tip'    => true,
    ),
@@ -178,7 +178,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
    "utilityref"  => $order->get_id(),
    "transid"     => $order->get_order_key(),
    "amount"      => round($order->get_total()),
-   "vendor"      => $this->merchant,
+   "vendor"      => $this->vendor,
    "order_id"    => $order->get_id(),
    "buyer_email" => $order->get_billing_email(),
    "buyer_name"  => $order->get_billing_first_name() . " " . $order->get_billing_last_name(),
@@ -188,7 +188,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   );
 
   $authorization = base64_encode($this->api_key);
-  $signed_fields = implode(',', array_keys($this->min_order));
+  $signed_fields = implode(',', array_keys($request));
   $digest        = $this->compute_signature($request, $signed_fields, $timestamp, $this->api_secret);
 
   return $this->send_api_request(
@@ -209,7 +209,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   */
  public function process_payment($order_id)
  {
-  $phone        = "255" . substr(sanitize_text_field($_POST['phone']), 1);
+  $phone        = "255" . substr(sanitize_text_field(trim($_POST['phone'])), 1);
   $order        = wc_get_order($order_id);
   $timestamp    = date('c');
   $create_order = $this->create_order($order, $phone, $timestamp);
