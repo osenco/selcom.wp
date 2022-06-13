@@ -160,21 +160,16 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   : json_decode($result['body'], true);
  }
 
- public function compute_signature($parameters, $signed_fields, $request_timestamp, $api_secret)
+ public function compute_signature($parameters, $signed_fields, $request_timestamp)
  {
   $fields_order = explode(',', $signed_fields);
   $sign_data    = "timestamp=$request_timestamp";
+
   foreach ($fields_order as $key) {
    $sign_data .= "&$key=" . $parameters[$key];
   }
 
-  //RS256 Signature Method
-  #$private_key_pem = openssl_get_privatekey(file_get_contents("path_to_private_key_file"));
-  #openssl_sign($sign_data, $signature, $private_key_pem, OPENSSL_ALGO_SHA256);
-  #return base64_encode($signature);
-
-  //HS256 Signature Method
-  return base64_encode(hash_hmac('sha256', $sign_data, $api_secret, true));
+  return base64_encode(hash_hmac('sha256', $sign_data, $this->api_secret, true));
  }
 
  /**
@@ -188,16 +183,16 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   $order         = wc_get_order($order_id);
   $authorization = base64_encode($this->api_key);
   $timestamp     = date('c');
-  $req           = array(
+  $request       = array(
    "utilityref" => $order_id,
    "transid"    => $order->get_order_key(),
    "amount"     => round($order->get_total()),
   );
 
-  $signed_fields = implode(',', array_keys($req));
-  $digest        = $this->compute_signature($req, $signed_fields, $timestamp, $this->api_secret);
+  $signed_fields = implode(',', array_keys($request));
+  $digest        = $this->compute_signature($request, $signed_fields, $timestamp);
   $response      = $this->send_api_request(
-   wp_json_encode($req),
+   wp_json_encode($request),
    $authorization,
    $digest,
    $signed_fields,
