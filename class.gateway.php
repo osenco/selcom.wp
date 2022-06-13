@@ -36,11 +36,18 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   $this->init_settings();
 
   // Define user set variables.
-  $this->title = $this->get_option('title');
+  $this->title        = $this->get_option('title');
+  $this->description  = $this->get_option('description');
+  $this->instructions = $this->get_option('instructions', $this->description);
+  $this->merchant     = $this->get_option('merchant_id');
+  $this->api_key      = $this->get_option('api_key');
+  $this->api_secret   = $this->get_option('api_secret');
+  $this->api_url      = $this->get_option('api_url');
 
   // Actions.
   add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
   add_action('woocommerce_thankyou_' . $this->id, array($this, 'thankyou_page'));
+  add_action('woocommerce_api_' . $this->id, array($this, 'process_webhook'));
   add_action('woocommerce_email_before_order_table', array($this, 'email_instructions'), 10, 3);
  }
 
@@ -129,9 +136,9 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   );
  }
 
- public function sendJSONPost($json, $authorization, $digest, $signed_fields, $timestamp)
+ public function send_api_request($json, $authorization, $digest, $signed_fields, $timestamp)
  {
-  $url     = "{$this->settings['api_ur;']}/utilitypayment/process";
+  $url     = "{$this->api_url}/utilitypayment/process";
   $headers = array(
    "Content-type"   => 'application/json;charset="utf-8"',
    "Accept"         => "application/json",
@@ -144,14 +151,8 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   );
 
   $result = wp_remote_post($url, array(
-   'method'      => 'POST',
-   'timeout'     => 45,
-   'redirection' => 5,
-   'httpversion' => '1.0',
-   'blocking'    => true,
-   'headers'     => $headers,
-   'body'        => $json,
-   'cookies'     => array(),
+   'headers' => $headers,
+   'body'    => $json,
   ));
 
   return is_wp_error($result)
@@ -159,7 +160,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   : json_decode($result['body'], true);
  }
 
- public function computeSignature($parameters, $signed_fields, $request_timestamp, $api_secret)
+ public function compute_signature($parameters, $signed_fields, $request_timestamp, $api_secret)
  {
   $fields_order = explode(',', $signed_fields);
   $sign_data    = "timestamp=$request_timestamp";
@@ -185,7 +186,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
  public function process_payment($order_id)
  {
   $order         = wc_get_order($order_id);
-  $authorization = base64_encode($this->settings['api_key']);
+  $authorization = base64_encode($this->api_key);
   $timestamp     = date('c');
   $req           = array(
    "utilityref" => $order_id,
@@ -194,25 +195,32 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   );
 
   $signed_fields = implode(',', array_keys($req));
-  $digest        = $this->computeSignature($req, $signed_fields, $timestamp, $this->settings['api_secret']);
-  $response      = $this->sendJSONPost(wp_json_encode($req), $authorization, $digest, $signed_fields, $timestamp);
-
-  // Mark as on-hold (we're awaiting the payment)
-  $order->update_status('on-hold', __('Awaiting payment', 'rcpro'));
-
-  // Reduce stock levels
-  $order->reduce_order_stock();
-
-  // Remove cart
-  WC()->cart->empty_cart();
-
-  // Return thankyou redirect
-  return array(
-   'result'   => 'success',
-   'redirect' => $this->get_return_url($order),
+  $digest        = $this->compute_signature($req, $signed_fields, $timestamp, $this->api_secret);
+  $response      = $this->send_api_request(
+   wp_json_encode($req),
+   $authorization,
+   $digest,
+   $signed_fields,
+   $timestamp
   );
- }
 
+  if (isset($response['result']) && $response['result'] === 'SUCCESS') {
+   // Remove cart
+   WC()->cart->empty_cart();
+
+   // Return thankyou redirect
+   return array(
+    'result'   => 'success',
+    'redirect' => $this->get_return_url($order),
+   );
+  } else {
+   wc_add_notice(__('Payment error: ', 'rcpro') . $response['message'], 'error');
+   return array(
+    'result'   => 'fail',
+    'redirect' => $this->get_return_url($order),
+   );
+  }
+ }
  /**
   * Output for the order received page.
   */
@@ -221,6 +229,29 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   if ($this->instructions) {
    echo wpautop(wptexturize($this->instructions));
   }
+ }
+
+/**
+ * Process webhook response with IPN
+ *
+ * @return array
+ */
+ public function process_webhook()
+ {
+  $data = json_decode(file_get_contents('php://input'), true);
+  if (isset($data['result']) && $data['result'] === 'SUCCESS') {
+   $order = wc_get_order($data['utilityref']);
+
+   if ($order && $order->get_status() === 'pending') {
+    $order->payment_complete($data['transid']);
+    $order->add_order_note(__('Payment received.', 'rcpro'));
+   }
+  }
+
+  return array(
+   'result'   => 'success',
+   'order_id' => $data['utilityref'],
+  );
  }
 
  /**
