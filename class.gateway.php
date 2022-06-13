@@ -136,9 +136,21 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   );
  }
 
- public function send_api_request($json, $authorization, $digest, $signed_fields, $timestamp)
+ public function compute_signature($parameters, $signed_fields, $request_timestamp)
  {
-  $url     = "{$this->api_url}/utilitypayment/process";
+  $fields_order = explode(',', $signed_fields);
+  $sign_data    = "timestamp=$request_timestamp";
+
+  foreach ($fields_order as $key) {
+   $sign_data .= "&$key=" . $parameters[$key];
+  }
+
+  return base64_encode(hash_hmac('sha256', $sign_data, $this->api_secret, true));
+ }
+
+ public function send_api_request($json, $authorization, $digest, $signed_fields, $timestamp, $endpoint = '')
+ {
+  $url     = $this->api_url . $endpoint;
   $headers = array(
    "Content-type"   => 'application/json;charset="utf-8"',
    "Accept"         => "application/json",
@@ -160,16 +172,33 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   : json_decode($result['body'], true);
  }
 
- public function compute_signature($parameters, $signed_fields, $request_timestamp)
+ public function create_order(WC_Order $order, $phone, $timestamp)
  {
-  $fields_order = explode(',', $signed_fields);
-  $sign_data    = "timestamp=$request_timestamp";
+  $request = array(
+   "utilityref"  => $order->get_id(),
+   "transid"     => $order->get_order_key(),
+   "amount"      => round($order->get_total()),
+   "vendor"      => $this->merchant,
+   "order_id"    => $order->get_id(),
+   "buyer_email" => $order->get_billing_email(),
+   "buyer_name"  => $order->get_billing_first_name() . " " . $order->get_billing_last_name(),
+   "buyer_phone" => $phone,
+   "currency"    => "TZS",
+   "no_of_items" => WC()->cart->cart_contents_count,
+  );
 
-  foreach ($fields_order as $key) {
-   $sign_data .= "&$key=" . $parameters[$key];
-  }
+  $authorization = base64_encode($this->api_key);
+  $signed_fields = implode(',', array_keys($this->min_order));
+  $digest        = $this->compute_signature($request, $signed_fields, $timestamp, $this->api_secret);
 
-  return base64_encode(hash_hmac('sha256', $sign_data, $this->api_secret, true));
+  return $this->send_api_request(
+   wp_json_encode($request),
+   $authorization,
+   $digest,
+   $signed_fields,
+   $timestamp,
+   '/checkout/create-order-minimal'
+  );
  }
 
  /**
@@ -180,42 +209,63 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   */
  public function process_payment($order_id)
  {
-  $order         = wc_get_order($order_id);
-  $authorization = base64_encode($this->api_key);
-  $timestamp     = date('c');
-  $request       = array(
-   "utilityref" => $order_id,
-   "transid"    => $order->get_order_key(),
-   "amount"     => round($order->get_total()),
-  );
+  $phone        = "255" . substr(sanitize_text_field($_POST['phone']), 1);
+  $order        = wc_get_order($order_id);
+  $timestamp    = date('c');
+  $create_order = $this->create_order($order, $phone, $timestamp);
 
-  $signed_fields = implode(',', array_keys($request));
-  $digest        = $this->compute_signature($request, $signed_fields, $timestamp);
-  $response      = $this->send_api_request(
-   wp_json_encode($request),
-   $authorization,
-   $digest,
-   $signed_fields,
-   $timestamp
-  );
+  if ($create_order && isset($create_order['result'])) {
+   if ($create_order['result'] === 'SUCCESS') {
+    $authorization = base64_encode($this->api_key);
+    $request       = array(
+     "order_id" => $order_id,
+     "transid"  => $order->get_order_key(),
+     "amount"   => round($order->get_total()),
+    );
 
-  if (isset($response['result']) && $response['result'] === 'SUCCESS') {
-   // Remove cart
-   WC()->cart->empty_cart();
+    $signed_fields = implode(',', array_keys($request));
+    $digest        = $this->compute_signature($request, $signed_fields, $timestamp);
+    $response      = $this->send_api_request(
+     wp_json_encode($request),
+     $authorization,
+     $digest,
+     $signed_fields,
+     $timestamp
+    );
 
-   // Return thankyou redirect
-   return array(
-    'result'   => 'success',
-    'redirect' => $this->get_return_url($order),
-   );
-  } else {
-   wc_add_notice(__('Payment error: ', 'rcpro') . $response['message'], 'error');
-   return array(
-    'result'   => 'fail',
-    'redirect' => $this->get_return_url($order),
-   );
+    if (isset($response['result']) && $response['result'] === 'SUCCESS') {
+     // Remove cart
+     WC()->cart->empty_cart();
+
+     // Reduce stock
+     wc_reduce_stock_levels($order_id);
+
+     if ($response['payment_status'] === 'COMPLETE') {
+      $order->payment_complete($response['transid']);
+     }
+
+     // Return thankyou redirect
+     return array(
+      'result'   => 'success',
+      'redirect' => $this->get_return_url($order),
+     );
+    } else {
+     wc_add_notice(__('Payment error: ', 'rcpro') . $response['message'], 'error');
+     return array(
+      'result'   => 'fail',
+      'redirect' => $this->get_return_url($order),
+     );
+    }
+   } else {
+    wc_add_notice($create_order['message'], 'error');
+    return array(
+     'result'   => 'fail',
+     'redirect' => $order->get_cancel_order_url(),
+    );
+   }
   }
  }
+
  /**
   * Output for the order received page.
   */
@@ -226,11 +276,11 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   }
  }
 
-/**
- * Process webhook response with IPN
- *
- * @return array
- */
+ /**
+  * Process webhook response with IPN
+  *
+  * @return array
+  */
  public function process_webhook()
  {
   $data = json_decode(file_get_contents('php://input'), true);
