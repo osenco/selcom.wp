@@ -148,7 +148,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   return base64_encode(hash_hmac('sha256', $sign_data, $this->api_secret, true));
  }
 
- public function send_api_request($json, $authorization, $digest, $signed_fields, $timestamp, $endpoint = '')
+ public function send_api_request($json, $authorization, $digest, $signed_fields, $timestamp, $endpoint = '/checkout/wallet-payment')
  {
   $url     = $this->api_url . $endpoint;
   $headers = array(
