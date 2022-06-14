@@ -208,7 +208,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   */
  public function process_payment($order_id)
  {
-  $phone        = "255" . substr(sanitize_text_field(trim($_POST['phone'])), 1);
+  $phone        = "255" . substr(sanitize_text_field(trim($_POST['phone'])), -9);
   $order        = wc_get_order($order_id);
   $timestamp    = date('c');
   $create_order = $this->create_order($order, $phone, $timestamp);
