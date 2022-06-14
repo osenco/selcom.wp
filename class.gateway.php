@@ -39,7 +39,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   $this->title        = $this->get_option('title');
   $this->description  = $this->get_option('description');
   $this->instructions = $this->get_option('instructions', $this->description);
-  $this->vendor     = $this->get_option('vendor_id');
+  $this->vendor       = $this->get_option('vendor_id');
   $this->api_key      = $this->get_option('api_key');
   $this->api_secret   = $this->get_option('api_secret');
   $this->api_url      = $this->get_option('api_url');
@@ -86,7 +86,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
     'default'     => __('Pay via Selcom Gateway', 'rcpro'),
     'desc_tip'    => true,
    ),
-   'vendor'     => array(
+   'vendor'       => array(
     'title'       => __('Vendor', 'rcpro'),
     'type'        => 'text',
     'description' => __('Vendor ID provided by Selcom.', 'rcpro'),
@@ -148,9 +148,10 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
   return base64_encode(hash_hmac('sha256', $sign_data, $this->api_secret, true));
  }
 
- public function send_api_request($json, $authorization, $digest, $signed_fields, $timestamp, $endpoint = '/checkout/wallet-payment')
+ public function send_api_request($json, $digest, $signed_fields, $timestamp, $endpoint = '/checkout/wallet-payment')
  {
   $url     = $this->api_url . $endpoint;
+  $authorization = base64_encode($this->api_key);
   $headers = array(
    "Content-type"   => 'application/json;charset="utf-8"',
    "Accept"         => "application/json",
@@ -187,13 +188,11 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
    "no_of_items" => WC()->cart->cart_contents_count,
   );
 
-  $authorization = base64_encode($this->api_key);
   $signed_fields = implode(',', array_keys($request));
   $digest        = $this->compute_signature($request, $signed_fields, $timestamp, $this->api_secret);
 
   return $this->send_api_request(
    wp_json_encode($request),
-   $authorization,
    $digest,
    $signed_fields,
    $timestamp,
@@ -216,7 +215,6 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
 
   if ($create_order && isset($create_order['result'])) {
    if ($create_order['result'] === 'SUCCESS') {
-    $authorization = base64_encode($this->api_key);
     $request       = array(
      "order_id" => $order_id,
      "transid"  => $order->get_order_key(),
@@ -227,7 +225,6 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
     $digest        = $this->compute_signature($request, $signed_fields, $timestamp);
     $response      = $this->send_api_request(
      wp_json_encode($request),
-     $authorization,
      $digest,
      $signed_fields,
      $timestamp
@@ -258,12 +255,16 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
     }
    } else {
     wc_add_notice($create_order['message'], 'error');
-    return array(
-     'result'   => 'fail',
-     'redirect' => $order->get_cancel_order_url(),
-    );
    }
+
+  } else {
+   wc_add_notice(__('An error occurred. Please try again', 'woocommerce'), 'error');
   }
+
+  return array(
+   'result'   => 'fail',
+   'redirect' => $order->get_cancel_order_url(),
+  );
  }
 
  /**
