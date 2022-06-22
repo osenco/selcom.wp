@@ -4,7 +4,8 @@
  * Plugin Name: Selcom WooCommerce Payment Gateway
  * Description: Selcom WooCommerce Payment Gateway allows you to accept payments via Selcom.
  * Version: 1.0
- * Author: Osen ConceptsAuthor URI: https://osen.co.ke/
+ * Author: Osen Concepts
+ * Author URI: https://osen.co.ke/
  *
  * Requires at least: 4.6
  * Tested up to: 5.8.1
