@@ -25,7 +25,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
 		$this->icon               = apply_filters('woocommerce_selcom_gateway_icon', plugins_url('selcom.png', __FILE__));
 		$this->has_fields         = true;
 		$this->method_title       = __('Selcom Gateway', 'woocommerce');
-		$this->method_description = __('Allows payments through Selcom Gateway.', 'woocommerce');
+		$this->method_description = __('Allows payments through Selcom Gateway. Use webhook: '.home_url("?wc-api=WC_Gateway_Selcom"), 'woocommerce');
 		$this->supports           = array(
 			'products',
 			'refunds',
@@ -200,7 +200,7 @@ JS;
 			"buyer_phone" => $phone,
 			"currency"    => "TZS",
 			"no_of_items" => WC()->cart->cart_contents_count,
-			"webhook" => base64_encode(home_url() . "/?wc-api=WC_Gateway_Selcom"),
+			"webhook" => base64_encode(home_url("?wc-api=WC_Gateway_Selcom")),
 			// 'buyer_remarks' => $order->get_customer_note()
 		);
 
@@ -234,7 +234,8 @@ JS;
 				$request = array(
 					"order_id" => $order_id,
 					"transid"  => $order->get_order_key(),
-					"msisdn"=> $phone
+					"msisdn"=> $phone,
+					"webhook" => home_url("?wc-api=WC_Gateway_Selcom")
 				);
 
 				$signed_fields = implode(',', array_keys($request));
