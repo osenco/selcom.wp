@@ -302,7 +302,7 @@ JS;
 	{
 		$data = json_decode(file_get_contents('php://input'), true);
 		if (isset($data['result']) && $data['result'] === 'SUCCESS') {
-			$order = wc_get_order($data['utilityref'] ?? isset($data['order_id']);
+			$order = wc_get_order($data['utilityref'] ?? $data['order_id']);
 
 			if ($order && $order->get_status() === 'pending') {
 				$order->payment_complete($data['transid']);
