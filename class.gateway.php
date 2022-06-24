@@ -39,7 +39,7 @@ class WC_Selcom_Gateway extends WC_Payment_Gateway
 		$this->title        = $this->get_option('title');
 		$this->description  = $this->get_option('description');
 		$this->instructions = $this->get_option('instructions', $this->description);
-		$this->vendor       = $this->get_option('vendor_id');
+		$this->vendor       = $this->get_option('vendor');
 		$this->api_key      = $this->get_option('api_key');
 		$this->api_secret   = $this->get_option('api_secret');
 		$this->api_url      = $this->get_option('api_url');
@@ -193,7 +193,7 @@ JS;
 			"utilityref"  => $order->get_id(),
 			"transid"     => $order->get_order_key(),
 			"amount"      => round($order->get_total()),
-			"vendor"      => $this->get_option('vendor_id'),
+			"vendor"      => $this->get_option('vendor'),
 			"order_id"    => $order->get_id(),
 			"buyer_email" => $order->get_billing_email(),
 			"buyer_name"  => $order->get_billing_first_name() . " " . $order->get_billing_last_name(),
