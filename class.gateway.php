@@ -190,8 +190,8 @@ JS;
 	public function create_order(WC_Order $order, $phone, $timestamp)
 	{
 		$request = array(
-			"utilityref"  => $order->get_id(),
-			"transid"     => $order->get_order_key(),
+			// "utilityref"  => $order->get_id(),
+			// "transid"     => $order->get_order_key(),
 			"amount"      => round($order->get_total()),
 			"vendor"      => $this->get_option('vendor'),
 			"order_id"    => $order->get_id(),
@@ -201,7 +201,7 @@ JS;
 			"currency"    => "TZS",
 			"no_of_items" => WC()->cart->cart_contents_count,
 			"webhook" => base64_encode(home_url() . "/?wc-api=WC_Gateway_Selcom"),
-			'buyer_remarks' => $order->get_customer_note()
+			// 'buyer_remarks' => $order->get_customer_note()
 		);
 
 		$signed_fields = implode(',', array_keys($request));
@@ -234,7 +234,7 @@ JS;
 				$request = array(
 					"order_id" => $order_id,
 					"transid"  => $order->get_order_key(),
-					"amount"   => round($order->get_total()),
+					"msisdn"=> $phone
 				);
 
 				$signed_fields = implode(',', array_keys($request));
