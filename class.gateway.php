@@ -232,10 +232,10 @@ JS;
 		if ($create_order && isset($create_order['result'])) {
 			if ($create_order['result'] === 'SUCCESS') {
 				$request = array(
-					"order_id" => $order_id,
-					"transid"  => $order->get_order_key(),
-					"msisdn"=> $phone,
-					"webhook" => home_url("?wc-api=WC_Gateway_Selcom")
+					"order_id" 	=> $order_id,
+					"transid"  	=> $order->get_order_key(),
+					"msisdn"	=> $phone,
+					// "webhook" => home_url("?wc-api=WC_Gateway_Selcom")
 				);
 
 				$signed_fields = implode(',', array_keys($request));
@@ -302,7 +302,7 @@ JS;
 	{
 		$data = json_decode(file_get_contents('php://input'), true);
 		if (isset($data['result']) && $data['result'] === 'SUCCESS') {
-			$order = wc_get_order($data['utilityref']);
+			$order = wc_get_order($data['utilityref'] ?? isset($data['order_id']);
 
 			if ($order && $order->get_status() === 'pending') {
 				$order->payment_complete($data['transid']);
