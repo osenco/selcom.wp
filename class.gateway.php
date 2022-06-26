@@ -235,7 +235,7 @@ JS;
 					"order_id" 	=> $order_id,
 					"transid"  	=> $order->get_order_key(),
 					"msisdn"	=> $phone,
-					// "webhook" => home_url("?wc-api=WC_Gateway_Selcom")
+					"webhook" 	=> home_url("?wc-api=WC_Gateway_Selcom")
 				);
 
 				$signed_fields = implode(',', array_keys($request));
@@ -300,7 +300,9 @@ JS;
 	 */
 	public function process_webhook()
 	{
-		$data = json_decode(file_get_contents('php://input'), true);
+		$input = file_get_contents('php://input');
+		$data = json_decode($input, true);
+		
 		if (isset($data['result']) && $data['result'] === 'SUCCESS') {
 			$order = wc_get_order($data['utilityref'] ?? $data['order_id']);
 
